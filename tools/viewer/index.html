@@ -1,0 +1,1216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HKNA Landmarks Viewer</title>
+<style>
+  :root { --panel: rgba(20, 24, 28, 0.88); --text: #e8eaec; --muted: #9aa3ab; --accent: #6cb4ff; --bad: #ff6b5e; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #8fb3d6; font: 13px/1.4 system-ui, sans-serif; }
+  canvas { display: block; }
+  button, select { font: inherit; background: #2b3238; color: var(--text); border: 1px solid #444c54;
+                   border-radius: 5px; padding: 3px 7px; }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: 0.45; cursor: default; }
+  button.bad { border-color: #7a3b36; }
+  button.bad:hover:not(:disabled) { border-color: var(--bad); }
+  .k { color: var(--muted); }
+  #ui { position: absolute; top: 10px; left: 10px; z-index: 4; background: var(--panel); color: var(--text);
+        padding: 10px 12px; border-radius: 8px; width: 300px; display: grid; gap: 8px; box-sizing: border-box;
+        max-height: calc(100% - 20px); overflow-y: auto; }
+  #ui > * { min-width: 0; }
+  #ui select { width: 100%; }
+  #ui .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  #ui label { color: var(--muted); display: flex; gap: 4px; align-items: center; }
+  #status { color: var(--muted); font-size: 12px; }
+  #pending { display: none; color: #ffb27a; font-size: 12px; }
+  #log { display: none; white-space: pre-wrap; font: 11px/1.35 ui-monospace, monospace; color: var(--muted);
+         background: #15191c; border-radius: 5px; padding: 6px; max-height: 160px; overflow: auto; margin: 0; }
+  #help { color: var(--muted); font-size: 11px; }
+  .card { border-top: 1px solid #3a4148; padding-top: 6px; display: none; }
+  .card b { color: var(--accent); font-weight: 600; }
+  .card b.go { cursor: pointer; }
+  .card b.go:hover { text-decoration: underline; }
+  .card.removed b { color: var(--bad); text-decoration: line-through; }
+  .card ul { margin: 4px 0 0; padding-left: 16px; color: var(--muted); }
+  .card .row { margin-top: 5px; }
+  .card a { color: var(--accent); font-size: 12px; cursor: pointer; }
+  .members { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 6px; }
+  .members th { color: var(--muted); font-weight: 500; text-align: right; padding: 2px 4px; }
+  .members td { text-align: right; padding: 2px 4px; border-top: 1px solid #2c3338; white-space: nowrap; }
+  .members th:first-child, .members td:first-child { text-align: left; }
+  .members td:first-child { overflow: hidden; text-overflow: ellipsis; max-width: 120px; cursor: pointer; }
+  .members td:first-child:hover { color: var(--accent); }
+  .members tr.removed td:first-child { color: var(--bad); text-decoration: line-through; }
+  .members .sw { display: inline-block; width: 8px; height: 8px; border: 1px solid #ff7ad9; margin-right: 4px; }
+  .members tr.removed .sw { border-color: var(--bad); }
+  .members button { padding: 0 6px; font-size: 11px; }
+  .ll { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; cursor: copy; }
+  .ll:hover { color: var(--accent); }
+  .ll.copied { color: #7fe08a; }
+  .photos { display: flex; gap: 4px; overflow-x: auto; margin-top: 6px; padding-bottom: 2px; }
+  .photos img { height: 62px; border-radius: 4px; cursor: zoom-in; border: 2px solid transparent; flex: none; }
+  .photos img:hover, .photos img.hot { border-color: #ffa040; }
+  .photos-note { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  #lightbox { position: fixed; inset: 0; background: rgba(8, 10, 12, 0.88); display: none; z-index: 10;
+              align-items: center; justify-content: center; flex-direction: column; gap: 8px; padding: 16px;
+              box-sizing: border-box; cursor: zoom-out; }
+  #lightbox.on { display: flex; }
+  #lightbox img { max-width: 100%; max-height: calc(100% - 70px); border-radius: 6px; }
+  #lightbox .cap { color: var(--text); font-size: 12px; text-align: center; max-width: 900px; }
+  #lightbox .cap a { color: var(--accent); }
+  #lightbox .nav { position: absolute; top: 50%; font-size: 28px; color: var(--text); cursor: pointer;
+                   padding: 10px 14px; user-select: none; }
+
+  #list { position: absolute; top: 10px; right: 10px; background: var(--panel); color: var(--text);
+          border-radius: 8px; width: 350px; max-height: calc(100% - 20px); display: flex; flex-direction: column;
+          box-sizing: border-box; }
+  #list header { display: flex; align-items: center; gap: 6px; padding: 8px 10px; cursor: pointer; }
+  #list header b { flex: 1; font-weight: 600; }
+  #list.closed .tabs, #list.closed .body { display: none; }
+  #list .tabs { display: flex; gap: 4px; padding: 0 10px 8px; }
+  #list .tabs button.on { border-color: var(--accent); color: var(--accent); }
+  #list.closed .search { display: none; }
+  #list .search { padding: 0 10px 8px; display: flex; gap: 6px; align-items: center; }
+  #list .search input { flex: 1; min-width: 0; font: inherit; background: #15191c; color: var(--text);
+                        border: 1px solid #444c54; border-radius: 5px; padding: 4px 7px; }
+  #list .search input:focus { outline: none; border-color: var(--accent); }
+  #list .search .k { font-size: 12px; white-space: nowrap; }
+  #list .body { overflow-y: auto; border-top: 1px solid #3a4148; }
+  #list table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  #list th { position: sticky; top: 0; background: #22282d; color: var(--muted); font-weight: 500;
+             text-align: right; padding: 4px 8px; cursor: pointer; user-select: none; white-space: nowrap; }
+  #list th:first-child, #list td:first-child { text-align: left; }
+  #list th.on { color: var(--accent); }
+  #list td { padding: 3px 8px; text-align: right; border-top: 1px solid #2c3338; white-space: nowrap; }
+  #list td:first-child { overflow: hidden; text-overflow: ellipsis; max-width: 190px; }
+  #list td .n { color: var(--muted); }
+  #list tr:hover td { background: #2b3238; cursor: pointer; }
+  #list tr.sel td { background: #33404c; }
+  #list tr.removed td:first-child { color: var(--bad); text-decoration: line-through; }
+  #list .bar { height: 3px; background: var(--accent); opacity: 0.6; margin-top: 2px; }
+  #list .empty { padding: 10px; color: var(--muted); }
+  /* modal dialogs: add photo, build progress */
+  .modal { position: fixed; inset: 0; background: rgba(8, 10, 12, 0.7); display: none; z-index: 20;
+           align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }
+  .modal.on { display: flex; }
+  .modal .box { background: #1b2025; color: var(--text); border-radius: 10px; padding: 14px 16px; width: 560px;
+                max-width: 100%; max-height: 100%; overflow-y: auto; box-sizing: border-box; display: grid; gap: 10px; }
+  .modal h3 { margin: 0; font-size: 15px; font-weight: 600; }
+  .modal label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+  .modal input[type=text], .modal input[type=number], .modal textarea, .edit input[type=number], .edit textarea {
+    font: inherit; background: #15191c; color: var(--text); border: 1px solid #444c54; border-radius: 5px;
+    padding: 4px 7px; min-width: 0; box-sizing: border-box; width: 100%; }
+  .modal .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .drop { border: 2px dashed #444c54; border-radius: 8px; padding: 14px; text-align: center; color: var(--muted);
+          cursor: pointer; }
+  .drop.over { border-color: var(--accent); color: var(--accent); }
+  .drop img { max-width: 100%; max-height: 220px; border-radius: 5px; display: block; margin: 0 auto 6px; }
+  .modal .row, .edit .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .modal .err { color: var(--bad); font-size: 12px; }
+  /* build progress */
+  .stages { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+  .stages li { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+  .stages li .ic { width: 16px; text-align: center; }
+  .stages li.done { color: var(--text); }
+  .stages li.done .ic { color: #7fe08a; }
+  .stages li.active { color: var(--accent); font-weight: 600; }
+  .stages li.failed { color: var(--bad); }
+  .pbar { height: 6px; background: #2b3238; border-radius: 3px; overflow: hidden; }
+  .pbar div { height: 100%; background: var(--accent); width: 0; transition: width 0.4s; }
+  #buildLog { white-space: pre-wrap; font: 11px/1.35 ui-monospace, monospace; color: var(--muted);
+              background: #111417; border-radius: 6px; padding: 8px; height: 220px; overflow: auto; margin: 0; }
+  /* camera match: the photo over the render */
+  #matchLayer { position: absolute; pointer-events: none; overflow: hidden; display: none; z-index: 2; }
+  #matchLayer.on { display: block; }
+  #matchLayer.pick { pointer-events: auto; cursor: crosshair; }
+  #matchLayer img { position: absolute; left: 0; max-width: none; }
+  #matchPanel { position: absolute; right: 10px; top: 10px; width: 320px; background: var(--panel); color: var(--text);
+                border-radius: 8px; padding: 10px 12px; display: none; gap: 6px; box-sizing: border-box; z-index: 3;
+                max-height: calc(100% - 20px); overflow-y: auto; }
+  #matchPanel.on { display: grid; }
+  #matchPanel b { font-weight: 600; }
+  .sl { display: grid; grid-template-columns: 62px 1fr 64px; gap: 6px; align-items: center; font-size: 12px; }
+  .sl span { color: var(--muted); }
+  .sl input[type=number] { font: inherit; font-size: 12px; background: #15191c; color: var(--text);
+                           border: 1px solid #444c54; border-radius: 4px; padding: 1px 4px; width: 100%; box-sizing: border-box; }
+  body.matching #list { display: none; }
+  /* edit panel in the building card */
+  .edit { display: grid; gap: 6px; margin-top: 6px; padding: 8px; background: #15191c; border-radius: 6px; }
+  .edit label { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+  .edit label.col { display: grid; gap: 3px; }
+  .edit input[type=color] { width: 40px; height: 24px; border: none; background: none; padding: 0; }
+  .edit textarea { font: 11px/1.35 ui-monospace, monospace; min-height: 70px; }
+  .tag { font-size: 10px; border: 1px solid #555; border-radius: 3px; padding: 0 4px; color: var(--muted); }
+  @media (max-width: 760px) { #list { top: auto; bottom: 10px; left: 10px; width: auto; max-height: 40%; } }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="ui">
+  <select id="lm"></select>
+  <div class="row">
+    <button id="reload" title="Reload scene after ./build.sh (R)">Reload</button>
+    <button id="rebuild" title="Run ./build.sh with the removal list, then reload">Rebuild</button>
+    <button id="link" title="Put this camera in the address bar">Link view</button>
+  </div>
+  <div class="row">
+    <label><input type="checkbox" id="ground" checked> imagery</label>
+    <label><input type="checkbox" id="wire"> wire</label>
+    <label><input type="checkbox" id="hideRemoved"> hide removed</label>
+  </div>
+  <div id="status">loading…</div>
+  <div id="pending"></div>
+  <pre id="log"></pre>
+  <div id="bld" class="card"></div>
+  <div id="obj" class="card"></div>
+  <div id="help">click: building · shift-click: its group · Del: remove/restore · /: search · drag: orbit ·
+    right-drag: pan · wheel: zoom · R: reload · Esc: deselect</div>
+</div>
+<div id="matchLayer"><img id="matchImg" alt=""></div>
+<div id="matchPanel">
+  <div class="row" style="display:flex;justify-content:space-between;align-items:center">
+    <b>Camera match</b><span class="k" id="mpWhat"></span></div>
+  <div class="sl"><span>photo</span><input type="range" id="mOpacity" min="0" max="1" step="0.01" value="0.5"><span class="k" id="mOpV">50%</span></div>
+  <div class="sl"><span>heading</span><input type="range" id="mHeading" min="0" max="360" step="0.1"><input type="number" id="mHeadingN" step="0.1"></div>
+  <div class="sl"><span>tilt</span><input type="range" id="mPitch" min="-30" max="60" step="0.1"><input type="number" id="mPitchN" step="0.1"></div>
+  <div class="sl"><span>fov</span><input type="range" id="mFov" min="10" max="120" step="0.1"><input type="number" id="mFovN" step="0.1"></div>
+  <div class="sl"><span>height</span><input type="range" id="mEye" min="0" max="80" step="0.1"><input type="number" id="mEyeN" step="0.1"></div>
+  <div class="sl"><span>east</span><input type="range" id="mEast" min="-60" max="60" step="0.5"><input type="number" id="mEastN" step="0.5"></div>
+  <div class="sl"><span>north</span><input type="range" id="mNorth" min="-60" max="60" step="0.5"><input type="number" id="mNorthN" step="0.5"></div>
+  <div class="sl"><span>trim top</span><input type="range" id="mTrimT" min="0" max="300" step="1"><input type="number" id="mTrimTN" step="1"></div>
+  <div class="sl"><span>trim btm</span><input type="range" id="mTrimB" min="0" max="300" step="1"><input type="number" id="mTrimBN" step="1"></div>
+  <label class="k" style="display:flex;gap:6px;align-items:center;font-size:12px">
+    <input type="checkbox" id="mFovH"> fov is horizontal (default: vertical)</label>
+  <div class="k" style="font-size:11px">←/→ heading · ↑/↓ tilt · [ / ] fov · PgUp/PgDn height · shift: fine · Space: flip photo/model</div>
+  <div class="row" style="display:flex;gap:6px;flex-wrap:wrap">
+    <button id="mSave">Save pose</button><button id="mPick" title="click the photo to set the wall colour">Eyedropper</button>
+    <button id="mExit">Exit</button></div>
+  <div class="k" id="mMsg" style="font-size:12px"></div>
+</div>
+<div class="modal" id="addPhoto"><div class="box">
+  <h3>Add a photo of <span id="apName"></span></h3>
+  <div class="drop" id="apDrop">Drop an image here, or click to choose<input type="file" id="apFile" accept="image/*" hidden></div>
+  <label>Street View URL (fills the camera pose)
+    <input type="text" id="apUrl" placeholder="https://www.google.com/maps/@-1.2594874,36.7852144,3a,65.1y,27.1h,99.5t/…"></label>
+  <div class="grid">
+    <label>lat<input type="number" id="apLat" step="0.000001"></label>
+    <label>lon<input type="number" id="apLon" step="0.000001"></label>
+    <label>heading °<input type="number" id="apHeading" step="0.1"></label>
+    <label>tilt ° (0 = level)<input type="number" id="apPitch" step="0.1" value="0"></label>
+    <label>fov °<input type="number" id="apFov" step="0.1" value="75"></label>
+    <label>camera height m<input type="number" id="apEye" step="0.1" value="2.5"></label>
+  </div>
+  <div class="k" style="font-size:12px">Screenshots: crop away the browser's tabs and address bar, or set "trim top" in match mode.
+    Without a URL, give the spot you stood and roughly which way you faced; match mode fine-tunes it.</div>
+  <div class="err" id="apErr"></div>
+  <div class="row"><button id="apSave">Add and match</button><button id="apCancel">Cancel</button></div>
+</div></div>
+<div class="modal" id="buildBox"><div class="box">
+  <h3 id="bbTitle">Rebuilding the pack</h3>
+  <ul class="stages" id="bbStages"></ul>
+  <div class="pbar"><div id="bbBar"></div></div>
+  <div class="k" id="bbStatus" style="font-size:12px"></div>
+  <pre id="buildLog"></pre>
+  <div class="row"><button id="bbClose" disabled>Close</button></div>
+</div></div>
+<div id="lightbox"><span class="nav" id="lbPrev" style="left:8px">‹</span><img id="lbImg" alt="">
+  <div class="cap" id="lbCap"></div><span class="nav" id="lbNext" style="right:8px">›</span></div>
+<div id="list" class="closed">
+  <header id="listHead"><b id="listTitle">Objects &amp; buildings</b><span class="k" id="listSum"></span><span id="listArrow">▸</span></header>
+  <div class="tabs">
+    <button data-tab="objects" class="on">Objects</button>
+    <button data-tab="buildings">Buildings</button>
+    <button data-tab="removed">Removed</button>
+  </div>
+  <div class="search">
+    <input id="q" type="search" placeholder="search name, near, id, file, lat lon  ( / )" autocomplete="off" spellcheck="false">
+    <span class="k" id="qCount"></span>
+  </div>
+  <div class="body"><table><thead id="thead"></thead><tbody id="rows"></tbody></table></div>
+</div>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const DATA = "data/";
+const $ = (id) => document.getElementById(id);
+// local metres (x east, z south, from prep.py's origin) -> lat/lon
+const M_LAT = 110574;
+function latLon(box) {
+  const c = box.getCenter(new THREE.Vector3()), o = data.origin;
+  const kx = 111320 * Math.cos(o.lat * Math.PI / 180);
+  return [o.lat - c.z / M_LAT, o.lon + c.x / kx];
+}
+const llText = (box) => latLon(box).map((v) => v.toFixed(5)).join(" ");
+const llSpan = (box) => `<span class="ll" title="click to copy">${llText(box)}</span>`;
+// click any coordinate to copy it ("lat lon", as in landmarks.txt / xpplace.py)
+document.addEventListener("click", (e) => {
+  const el = e.target.closest(".ll");
+  if (!el) return;
+  e.stopPropagation();
+  navigator.clipboard?.writeText(el.textContent).then(() => {
+    el.classList.add("copied"); setTimeout(() => el.classList.remove("copied"), 900);
+  });
+}, true);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8fb3d6);
+scene.fog = new THREE.Fog(0x8fb3d6, 4000, 16000);
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 1, 40000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.maxPolarAngle = Math.PI * 0.495;
+scene.add(new THREE.HemisphereLight(0xdfeaff, 0x6b6050, 1.4));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.position.set(-0.5, 1.0, 0.35);          // afternoon-ish, from the north-west
+scene.add(sun);
+
+const world = new THREE.Group(), groundGroup = new THREE.Group();
+scene.add(world, groundGroup);
+// plain ground beyond the imagery tiles, so outlying towers don't float in the sky
+// ground layers sit at the same height; polygonOffset (depth-resolution independent) keeps the
+// detail imagery in front of the overview, and both in front of this plain ground, at any range
+scene.add(new THREE.Mesh(new THREE.PlaneGeometry(80000, 80000).rotateX(-Math.PI / 2),
+                         new THREE.MeshLambertMaterial({ color: 0x7d7a5e, polygonOffset: true,
+                                                         polygonOffsetFactor: 8, polygonOffsetUnits: 8 })));
+const objBox = new THREE.Box3Helper(new THREE.Box3(), 0xffd400);
+const bldBox = new THREE.Box3Helper(new THREE.Box3(), 0x3ee0ff);
+objBox.visible = bldBox.visible = false;
+const memberBoxes = new THREE.Group();          // a selected group's buildings, one box each
+scene.add(objBox, bldBox, memberBoxes);
+const MEMBER = 0xff7ad9, MEMBER_REMOVED = 0xff3b2f;
+const photoMarks = new THREE.Group();           // camera positions of the selected building's photos
+scene.add(photoMarks);
+
+let atlasMat = null, data = null;
+const removedMat = new THREE.MeshLambertMaterial({ color: 0xff3b2f, transparent: true, opacity: 0.55,
+                                                   side: THREE.DoubleSide, depthWrite: false });
+let sel = { mesh: null, feat: null };
+let removed = new Set(), notes = {}, canEdit = false;
+let buildings = [];          // every building: { mesh, feat, box, verts }
+
+// X-Plane OBJ8: VT x y z nx ny nz u v, IDX10/IDX, one TRIS range (as written by build.py)
+function parseObj(text) {
+  const v = [], idx = [];
+  for (const line of text.split("\n")) {
+    if (line.startsWith("VT ")) { const w = line.split(/\s+/); for (let i = 1; i <= 8; i++) v.push(+w[i]); }
+    else if (line.startsWith("IDX")) { const w = line.trim().split(/\s+/); for (let i = 1; i < w.length; i++) idx.push(+w[i]); }
+  }
+  const n = v.length / 8, pos = new Float32Array(n * 3), nrm = new Float32Array(n * 3), uv = new Float32Array(n * 2);
+  for (let i = 0; i < n; i++) {
+    pos.set([v[i * 8], v[i * 8 + 1], v[i * 8 + 2]], i * 3);
+    nrm.set([v[i * 8 + 3], v[i * 8 + 4], v[i * 8 + 5]], i * 3);
+    uv.set([v[i * 8 + 6], v[i * 8 + 7]], i * 2);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setAttribute("normal", new THREE.BufferAttribute(nrm, 3));
+  g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
+}
+
+function clear(group) {
+  for (const c of [...group.children]) {
+    group.remove(c);
+    c.geometry?.dispose();
+    for (const m of [].concat(c.material || [])) if (m !== atlasMat && m !== removedMat) { m.map?.dispose(); m.dispose(); }
+  }
+}
+
+// world-space box and distinct vertex count of one building's triangle range
+function featInfo(mesh, f) {
+  const pos = mesh.geometry.attributes.position, idx = mesh.geometry.index.array, b = new THREE.Box3(), v = new THREE.Vector3();
+  const seen = new Set();
+  for (let i = f.tri0 * 3; i < f.tri1 * 3; i++) {
+    if (seen.has(idx[i])) continue;
+    seen.add(idx[i]);
+    b.expandByPoint(v.fromBufferAttribute(pos, idx[i]));
+  }
+  return { box: b.applyMatrix4(mesh.matrixWorld), verts: seen.size };
+}
+
+// removed buildings: red overlay (or hidden), via geometry groups over the triangle ranges
+function applyMarks(mesh) {
+  const g = mesh.geometry, feats = mesh.userData.feats;
+  if (!feats?.length) return;
+  g.clearGroups();
+  const hide = $("hideRemoved").checked;
+  let start = 0, cur = null;
+  const flush = (end) => { if (end > start && cur !== 2) g.addGroup(start * 3, (end - start) * 3, cur); start = end; };
+  for (const f of [...feats].sort((a, b) => a.tri0 - b.tri0)) {
+    const m = removed.has(f.id) ? (hide ? 2 : 1) : 0;
+    if (f.tri0 > start && cur !== 0) { flush(f.tri0); cur = 0; }   // gap between ranges: normal
+    if (m !== cur) { flush(f.tri0); cur = m; }
+  }
+  flush(g.index.count / 3);
+  mesh.material = [atlasMat, removedMat];
+}
+
+async function load(keepCamera) {
+  const bust = "?t=" + Date.now();
+  $("status").textContent = "loading…";
+  data = await (await fetch(DATA + "scene.json" + bust)).json();
+  const index = await fetch(DATA + "features.json" + bust).then((r) => r.ok ? r.json() : {}).catch(() => ({}));
+  try {
+    const r = await fetch("/api/removed" + bust);
+    if (!r.ok) throw 0;
+    const j = await r.json();
+    removed = new Set(j.ids); notes = j.notes || {}; canEdit = true;
+    overrides = await (await fetch("/api/overrides" + bust)).json();
+  } catch (e) { canEdit = false; }
+  $("rebuild").disabled = !canEdit;
+  const tex = await new THREE.TextureLoader().loadAsync(DATA + "atlas.png" + bust);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  atlasMat?.map?.dispose(); atlasMat?.dispose();
+  atlasMat = new THREE.MeshLambertMaterial({ map: tex, side: THREE.DoubleSide, wireframe: $("wire").checked });
+  removedMat.wireframe = $("wire").checked;
+  clear(world); clear(groundGroup);
+
+  const cache = new Map();
+  let tris = 0;
+  await Promise.all(data.objects.map(async (o) => {
+    let mesh;
+    if (o.obj) {
+      if (!cache.has(o.obj)) cache.set(o.obj, fetch("../../" + o.obj + bust).then((r) => r.text()).then(parseObj));
+      const g = (await cache.get(o.obj)).clone();
+      tris += g.index.count / 3;
+      mesh = new THREE.Mesh(g, atlasMat);
+      mesh.userData = { file: o.obj, tris: g.index.count / 3, verts: g.attributes.position.count, feats: index[o.obj] || [] };
+    } else {   // library object (wind turbine): a simple white stand-in
+      mesh = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.8, 50, 8).translate(0, 25, 0),
+                            new THREE.MeshLambertMaterial({ color: 0xeeeeee }));
+      mesh.userData = { file: o.lib, lib: true, feats: [] };
+    }
+    mesh.position.set(o.x, 0, o.z);
+    mesh.rotation.y = -THREE.MathUtils.degToRad(o.hdg);
+    world.add(mesh);
+  }));
+  world.updateMatrixWorld(true);
+  buildings = [];
+  for (const m of world.children) {
+    for (const f of m.userData.feats) buildings.push({ mesh: m, feat: f, ...featInfo(m, f) });
+    applyMarks(m);
+  }
+
+  for (const t of data.ground) {
+    const img = await new THREE.TextureLoader().loadAsync(DATA + t.img);
+    img.colorSpace = THREE.SRGBColorSpace;
+    img.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    const w = t.x1 - t.x0, d = t.z1 - t.z0;
+    const back = t.layer === 0 ? 4 : 0;         // overview behind the detail tiles
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2),
+                             new THREE.MeshLambertMaterial({ map: img, polygonOffset: back > 0,
+                                                             polygonOffsetFactor: back, polygonOffsetUnits: back }));
+    m.position.set((t.x0 + t.x1) / 2, 0, (t.z0 + t.z1) / 2);
+    groundGroup.add(m);
+  }
+  groundGroup.visible = $("ground").checked;
+
+  const lm = $("lm"), prev = lm.value;
+  lm.innerHTML = "";
+  const kinds = { landmark: "Landmarks", tower: "Towers", stadium: "Stadiums", AIP: "AIP", other: "Other" };
+  for (const [k, label] of Object.entries(kinds)) {
+    const grp = document.createElement("optgroup"); grp.label = label;
+    data.landmarks.filter((l) => l.kind === k).forEach((l) => {
+      const o = document.createElement("option"); o.value = l.name; o.textContent = `${l.name} (${l.h} m)`;
+      grp.appendChild(o);
+    });
+    if (grp.children.length) lm.appendChild(grp);
+  }
+  if (prev && prev !== "__near") lm.value = prev;
+  $("status").textContent = `${data.objects.length} objects · ${buildings.length} buildings · ` +
+                            `${Math.round(tris).toLocaleString()} triangles`;
+  updatePending();
+  // keep the selection across reloads (same object file / building id, if still built)
+  const pf = sel.mesh?.userData.file, pid = sel.feat?.id;
+  const m = pf && world.children.find((x) => x.userData.file === pf);
+  const b = pid && buildings.find((x) => x.feat.id === pid);
+  select(b ? b.mesh : m || null, b ? b.feat : null);
+  renderList();
+  if (!keepCamera) fromHash();
+}
+
+// ------------------------------------------------ where things are
+const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+function whereIs(b) {
+  const inside = data.landmarks.filter((l) => l.ours !== false && l.x >= b.min.x && l.x <= b.max.x &&
+                                              l.z >= b.min.z && l.z <= b.max.z).sort((a, c) => c.h - a.h);
+  if (inside.length) return { inside };
+  const c = b.getCenter(new THREE.Vector3());
+  let near = null, nd = Infinity;
+  for (const l of data.landmarks) {
+    const d = Math.hypot(l.x - c.x, l.z - c.z);
+    if (d < nd) { near = l; nd = d; }
+  }
+  const brg = (Math.atan2(c.x - near.x, near.z - c.z) * 180 / Math.PI + 360) % 360;   // landmark -> object
+  return { inside, near, dist: nd, dir: COMPASS[Math.round(brg / 45) % 8] };
+}
+const nearText = (w) => `near ${w.near.name}, ${Math.round(w.dist)} m ${w.dir}`;
+
+function syncDropdown(w, keepName) {
+  const lm = $("lm");
+  let near = lm.querySelector('option[value="__near"]');
+  if (w && !w.inside.length && w.near) {
+    if (!near) { near = document.createElement("option"); near.value = "__near"; lm.prepend(near); }
+    near.textContent = `near ${w.near.name} · ${Math.round(w.dist)} m ${w.dir}`;
+    lm.value = "__near";
+    return;
+  }
+  near?.remove();
+  if (w && w.inside.length) lm.value = keepName && w.inside.some((l) => l.name === keepName) ? keepName : w.inside[0].name;
+}
+
+function buildingAt(x, z) {        // smallest building footprint holding the point
+  let best = null, bestA = Infinity;
+  for (const b of buildings) {
+    const bb = b.box;
+    if (x < bb.min.x || x > bb.max.x || z < bb.min.z || z > bb.max.z) continue;
+    const a = (bb.max.x - bb.min.x) * (bb.max.z - bb.min.z);
+    if (a < bestA) { best = b; bestA = a; }
+  }
+  return best;
+}
+function meshAt(x, z) {
+  let best = null, bestA = Infinity;
+  for (const m of world.children) {
+    if (!m.userData.file || m.userData.lib) continue;
+    const b = new THREE.Box3().setFromObject(m);
+    if (x < b.min.x || x > b.max.x || z < b.min.z || z > b.max.z) continue;
+    const a = (b.max.x - b.min.x) * (b.max.z - b.min.z);
+    if (a < bestA) { best = m; bestA = a; }
+  }
+  return best;
+}
+
+// ------------------------------------------------ selection
+const featLabel = (f) => f.name || `unnamed ${f.kind === "bldg" ? "tower" : f.kind}`;
+const osmLink = (id) => /^\d+$/.test(id) ? `https://www.openstreetmap.org/way/${id}` : null;
+
+function showMembers(mesh) {
+  for (const c of [...memberBoxes.children]) { memberBoxes.remove(c); c.geometry.dispose(); c.material.dispose(); }
+  if (!mesh) return;
+  for (const b of buildings) {
+    if (b.mesh !== mesh) continue;
+    memberBoxes.add(new THREE.Box3Helper(b.box.clone().expandByScalar(0.6), removed.has(b.feat.id) ? MEMBER_REMOVED : MEMBER));
+  }
+}
+
+function select(mesh, feat, keepName) {
+  sel = { mesh: mesh || null, feat: mesh ? feat || null : null };
+  const ob = $("obj"), bd = $("bld");
+  if (!sel.mesh) {
+    objBox.visible = bldBox.visible = false; ob.style.display = bd.style.display = "none";
+    showMembers(null);
+    clearPhotos();
+    markRows();
+    return;
+  }
+  const u = sel.mesh.userData;
+  objBox.box.setFromObject(sel.mesh);
+  objBox.visible = true;
+  showMembers(sel.feat ? null : sel.mesh);          // group mode: every building boxed
+  if (sel.feat) {
+    const b = buildings.find((x) => x.feat === sel.feat);
+    bldBox.box.copy(b.box);
+    bldBox.visible = true;
+    const f = sel.feat, w = whereIs(b.box), isRem = removed.has(f.id), link = osmLink(f.id);
+    syncDropdown(w, keepName);
+    bd.className = "card" + (isRem ? " removed" : "");
+    bd.innerHTML = `<b class="go" id="bldName" title="focus this building">${esc(featLabel(f))}</b> <span class="k">${f.h} m</span>` +
+      `<div><span class="k">triangles</span> ${(f.tri1 - f.tri0).toLocaleString()} · ` +
+      `<span class="k">vertices</span> ${b.verts.toLocaleString()} ` +
+      `<span class="k">(${Math.round(100 * (f.tri1 - f.tri0) / u.tris)}% of group)</span></div>` +
+      `<div class="k">id ${esc(f.id)} · ${esc(f.kind)}${w.inside.length ? "" : " · " + esc(nearText(w))}</div>` +
+      `<div>${llSpan(b.box)}</div>` +
+      `<div class="row"><button id="rmBtn" class="${isRem ? "" : "bad"}" ${canEdit ? "" : "disabled"}>` +
+      `${isRem ? "Restore" : "Remove"}</button><button id="grpBtn">Select group</button>` +
+      `<button id="addPhBtn" ${canEdit ? "" : "disabled"}>+ Photo</button><button id="editBtn" ${canEdit ? "" : "disabled"}>Edit</button>` +
+      (f.edited ? ` <span class="tag" title="has edits in source/overrides.json">edited</span>` : "") +
+      (link ? `<a href="${link}" target="_blank" rel="noopener">OSM ↗</a>` : "") + `</div>` +
+      (canEdit ? "" : `<div class="k">start with ./view.sh to edit</div>`);
+    bd.style.display = "block";
+    $("rmBtn").onclick = () => toggleRemoved(f);
+    $("bldName").onclick = () => flyTo(b.box);
+    showPhotos(f, b.box);
+    $("grpBtn").onclick = () => select(sel.mesh, null);
+    $("addPhBtn").onclick = openAddPhoto;
+    $("editBtn").onclick = () => openEditor(false);
+  } else {
+    bldBox.visible = false; bd.style.display = "none";
+    clearPhotos();
+  }
+  const w = whereIs(objBox.box);
+  if (!sel.feat) syncDropdown(w, keepName);
+  const where = w.inside.length ? `<ul>${w.inside.map((l) => `<li>${esc(l.name)}</li>`).join("")}</ul>`
+                                : `<div class="k">${esc(nearText(w))}</div>`;
+  const bb = objBox.box;
+  if (u.lib) {
+    ob.innerHTML = `<b>${esc(u.file)}</b><div class="k">library object (stand-in shown)</div>` + where;
+  } else {
+    const members = buildings.filter((x) => x.mesh === sel.mesh).sort((p, q) => (q.feat.tri1 - q.feat.tri0) - (p.feat.tri1 - p.feat.tri0));
+    ob.innerHTML = `<span class="k">group</span> <b class="go" id="grpName" title="focus the whole group">${esc(u.file.replace("objects/", ""))}</b>` +
+      `<div><span class="k">triangles</span> ${u.tris.toLocaleString()} · <span class="k">vertices</span> ${u.verts.toLocaleString()}` +
+      ` · <span class="k">${members.length} buildings</span></div>` +
+      `<div class="k">${Math.round(bb.max.x - bb.min.x)} × ${Math.round(bb.max.z - bb.min.z)} m, top ${Math.round(bb.max.y)} m</div>` + where +
+      (sel.feat ? `<div class="row"><a id="grpLink">show its ${members.length} buildings</a></div>` :
+       `<table class="members"><tr><th>building</th><th>m</th><th>tris</th><th>verts</th><th></th></tr>` +
+       members.map((x, i) => {
+         const rem = removed.has(x.feat.id);
+         return `<tr class="${rem ? "removed" : ""}" data-i="${i}"><td title="id ${esc(x.feat.id)}"><span class="sw"></span>` +
+                `${esc(x.feat.name || "unnamed " + (x.feat.kind === "bldg" ? "tower" : x.feat.kind))}` +
+                `<br>${llSpan(x.box)}</td>` +
+                `<td>${x.feat.h}</td><td>${(x.feat.tri1 - x.feat.tri0).toLocaleString()}</td><td>${x.verts.toLocaleString()}</td>` +
+                `<td><button class="${rem ? "" : "bad"}" ${canEdit ? "" : "disabled"} title="${rem ? "restore" : "remove"}">${rem ? "↺" : "×"}</button></td></tr>`;
+       }).join("") + `</table>`);
+    $("grpName").onclick = () => flyTo(new THREE.Box3().setFromObject(sel.mesh));
+    if (sel.feat) $("grpLink").onclick = () => select(sel.mesh, null);
+    else ob.querySelectorAll(".members tr[data-i]").forEach((tr) => {
+      const x = members[+tr.dataset.i];
+      tr.querySelector("td").onclick = () => { select(x.mesh, x.feat); flyTo(x.box); };
+      tr.querySelector("button").onclick = () => toggleRemoved(x.feat);
+    });
+  }
+  ob.style.display = "block";
+  markRows();
+}
+
+// ------------------------------------------------ photos (tools/fetch_photos.py -> photos/<id>.json)
+let photoSet = [], lbIndex = 0;
+function toLocal(lat, lon) {
+  const o = data.origin, kx = 111320 * Math.cos(o.lat * Math.PI / 180);
+  return new THREE.Vector3((lon - o.lon) * kx, 0, -(lat - o.lat) * M_LAT);
+}
+function clearPhotos() {
+  for (const c of [...photoMarks.children]) { photoMarks.remove(c); c.geometry?.dispose(); c.material?.dispose(); }
+  photoSet = [];
+}
+const camMat = () => new THREE.MeshBasicMaterial({ color: 0xffa040 });
+async function showPhotos(f, box) {
+  clearPhotos();
+  const bd = $("bld"), id = f.id;
+  let rec = null;
+  try { const r = await fetch(`../../photos/${encodeURIComponent(id)}.json?t=${Date.now()}`); if (r.ok) rec = await r.json(); }
+  catch (e) {}
+  if (sel.feat?.id !== id) return;                 // selection moved on while loading
+  const div = document.createElement("div");
+  if (!rec || !rec.photos.length) {
+    div.className = "photos-note";
+    div.textContent = rec ? "no open photos found" : `no photos fetched: tools/fetch_photos.py ${id}`;
+    bd.appendChild(div);
+    return;
+  }
+  photoSet = rec.photos;
+  div.className = "photos";
+  const top = box.max.y, centre = box.getCenter(new THREE.Vector3());
+  rec.photos.forEach((p, i) => {
+    const img = document.createElement("img");
+    img.src = `../../photos/${p.file}`; img.loading = "lazy";
+    img.title = `${p.src} · ${p.author || "?"} · ${p.license}\ncamera ${p.dist} m ${COMPASS[Math.round(p.bearing / 45) % 8]} of the building`;
+    img.onclick = () => openLightbox(i);
+    // 3D: a marker where the camera stood, and a line to the building
+    const at = toLocal(p.lat, p.lon).setY(1.7);
+    const mark = new THREE.Mesh(new THREE.SphereGeometry(2.2, 12, 8), camMat());
+    mark.position.copy(at);
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([at, new THREE.Vector3(centre.x, Math.min(top, 30), centre.z)]),
+                                new THREE.LineBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.7 }));
+    photoMarks.add(mark, line);
+    img.onmouseenter = () => { mark.scale.setScalar(2.2); mark.material.color.set(0xffffff); };
+    img.onmouseleave = () => { mark.scale.setScalar(1); mark.material.color.set(0xffa040); };
+    div.appendChild(img);
+  });
+  bd.appendChild(div);
+  const note = document.createElement("div");
+  note.className = "photos-note";
+  note.textContent = `${rec.photos.length} open-licence photo${rec.photos.length > 1 ? "s" : ""} · orange = camera positions`;
+  bd.appendChild(note);
+}
+function openLightbox(i) {
+  if (!photoSet.length) return;
+  lbIndex = (i + photoSet.length) % photoSet.length;
+  const p = photoSet[lbIndex];
+  $("lbImg").src = `../../photos/${p.file}`;
+  $("lbCap").innerHTML = `${esc(p.title || p.src)} · ${esc(p.author || "unknown author")} · ${esc(p.license)}` +
+    (p.date ? ` · ${esc(p.date)}` : "") +
+    `<br>camera ${p.dist} m ${COMPASS[Math.round(p.bearing / 45) % 8]} of the building` +
+    (p.heading != null ? `, facing ${p.heading}°` : "") +
+    (p.page ? ` · <a href="${esc(p.page)}" target="_blank" rel="noopener">source ↗</a>` : "") +
+    (p.lat != null && sel.feat ? ` · <a id="lbMatch">match in 3D</a>` : "") +
+    (sel.feat && canEdit ? ` · <a id="lbDel">remove photo</a>` : "") + ` · ${lbIndex + 1}/${photoSet.length}`;
+  if ($("lbDel")) $("lbDel").onclick = (e) => { e.stopPropagation(); deletePhoto(sel.feat, p); };
+  if ($("lbMatch")) $("lbMatch").onclick = (e) => { e.stopPropagation(); closeLightbox(); enterMatch(sel.feat, p); };
+  $("lightbox").classList.add("on");
+}
+async function deletePhoto(f, p) {
+  if (!confirm(`Remove this photo from ${f.name || f.id}?` + (p.file.startsWith("user/") ? " Your uploaded file is deleted." : ""))) return;
+  const r = await fetch("/api/photo/delete", { method: "POST", headers: { "Content-Type": "application/json" },
+                                               body: JSON.stringify({ id: f.id, file: p.file }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { alert(`Couldn't remove it: ${j.error || r.status}`); return; }
+  closeLightbox();
+  select(sel.mesh, f, true);                       // re-list the photos
+}
+const closeLightbox = () => $("lightbox").classList.remove("on");
+$("lightbox").onclick = (e) => { if (e.target.tagName !== "A" && !e.target.classList.contains("nav")) closeLightbox(); };
+$("lbPrev").onclick = (e) => { e.stopPropagation(); openLightbox(lbIndex - 1); };
+$("lbNext").onclick = (e) => { e.stopPropagation(); openLightbox(lbIndex + 1); };
+
+// ------------------------------------------------ camera match: a photo over the model, from its pose
+let match = null, overrides = {};
+const mFields = [["Heading", "heading"], ["Pitch", "pitch"], ["Fov", "fov"], ["Eye", "eye"], ["East", "east"],
+                 ["North", "north"], ["TrimT", "trim_top"], ["TrimB", "trim_bottom"]];
+function matchAspect() {
+  const m = match, h = m.nh - m.pose.trim_top - m.pose.trim_bottom;
+  return m.nw / Math.max(10, h);
+}
+function layoutMatch() {
+  if (!match) return;
+  const a = matchAspect(), W = innerWidth, H = innerHeight;
+  const w = W / H > a ? H * a : W, h = W / H > a ? H : W / a, left = (W - w) / 2, top = (H - h) / 2;
+  renderer.setSize(w, h);
+  Object.assign(renderer.domElement.style, { position: "absolute", left: left + "px", top: top + "px" });
+  Object.assign($("matchLayer").style, { left: left + "px", top: top + "px", width: w + "px", height: h + "px" });
+  const sc = h / (match.nh - match.pose.trim_top - match.pose.trim_bottom), img = $("matchImg");
+  img.style.width = match.nw * sc + "px";
+  img.style.top = -match.pose.trim_top * sc + "px";
+  match.scale = sc;
+  camera.aspect = a;
+  applyMatchCamera();
+}
+function applyMatchCamera() {
+  const p = match.pose, at = toLocal(p.lat, p.lon);
+  camera.position.set(at.x + p.east, p.eye, at.z - p.north);
+  camera.rotation.order = "YXZ";
+  camera.rotation.set(THREE.MathUtils.degToRad(p.pitch), -THREE.MathUtils.degToRad(p.heading), 0);
+  const a = matchAspect();
+  camera.fov = p.fov_axis === "h" ? THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(p.fov) / 2) / a)) : p.fov;
+  camera.updateProjectionMatrix();
+  for (const [k, key] of mFields) { $("m" + k).value = p[key]; $("m" + k + "N").value = +(+p[key]).toFixed(2); }
+  $("mFovH").checked = p.fov_axis === "h";
+}
+function enterMatch(f, photo) {
+  if (photo.lat == null) { alert("This photo has no camera position."); return; }
+  const b = buildings.find((x) => x.feat.id === f.id);
+  const toward = b ? (() => { const c = b.box.getCenter(new THREE.Vector3()), at = toLocal(photo.lat, photo.lon);
+                              return (Math.atan2(c.x - at.x, at.z - c.z) * 180 / Math.PI + 360) % 360; })() : 0;
+  const prev = { pos: camera.position.clone(), target: controls.target.clone(), fov: camera.fov };
+  match = { fid: f.id, file: photo.file, src: photo.src, prev, nw: 1, nh: 1,
+            pose: { lat: photo.lat, lon: photo.lon, heading: photo.heading ?? toward, pitch: photo.pitch ?? 0,
+                    fov: photo.fov ?? 60, fov_axis: photo.fov_axis || "v", eye: photo.eye ?? 2.5,
+                    trim_top: photo.trim_top || 0, trim_bottom: photo.trim_bottom || 0, east: 0, north: 0 } };
+  const img = $("matchImg");
+  img.onload = () => { match.nw = img.naturalWidth; match.nh = img.naturalHeight; layoutMatch(); };
+  img.src = `../../photos/${photo.file}`;
+  img.style.opacity = $("mOpacity").value;
+  controls.enabled = false;
+  match.helpers = [objBox, bldBox, memberBoxes, photoMarks].map((h) => [h, h.visible]);
+  for (const [h] of match.helpers) h.visible = false;
+  document.body.classList.add("matching");
+  $("matchLayer").classList.add("on"); $("matchPanel").classList.add("on");
+  $("mpWhat").textContent = `${photo.src}${photo.pose_matched ? " · saved pose" : ""}`;
+  $("mMsg").textContent = "Line the model up with the photo, then Save pose.";
+}
+function exitMatch() {
+  if (!match) return;
+  const prev = match.prev;
+  for (const [h, v] of match.helpers || []) h.visible = v;
+  match = null;
+  $("matchLayer").classList.remove("on", "pick"); $("matchPanel").classList.remove("on");
+  document.body.classList.remove("matching");
+  renderer.domElement.style.position = renderer.domElement.style.left = renderer.domElement.style.top = "";
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight; camera.fov = prev.fov; camera.updateProjectionMatrix();
+  camera.position.copy(prev.pos); controls.target.copy(prev.target);
+  controls.enabled = true; controls.update();
+}
+for (const [k, key] of mFields) {
+  const set = (v) => { if (!match || !isFinite(v)) return; match.pose[key] = v;
+                       key.startsWith("trim") ? layoutMatch() : applyMatchCamera(); };
+  $("m" + k).oninput = (e) => set(+e.target.value);
+  $("m" + k + "N").onchange = (e) => set(+e.target.value);
+}
+$("mFovH").onchange = (e) => { if (match) { match.pose.fov_axis = e.target.checked ? "h" : "v"; applyMatchCamera(); } };
+$("mOpacity").oninput = (e) => { $("matchImg").style.opacity = e.target.value; $("mOpV").textContent = Math.round(e.target.value * 100) + "%"; };
+$("mExit").onclick = exitMatch;
+$("mSave").onclick = async () => {
+  const p = match.pose, o = data.origin, kx = 111320 * Math.cos(o.lat * Math.PI / 180);
+  const pose = { lat: +(p.lat + p.north / M_LAT).toFixed(7), lon: +(p.lon + p.east / kx).toFixed(7),
+                 heading: +p.heading.toFixed(2), pitch: +p.pitch.toFixed(2), fov: +p.fov.toFixed(2), fov_axis: p.fov_axis,
+                 eye: +p.eye.toFixed(2), trim_top: p.trim_top, trim_bottom: p.trim_bottom };
+  const r = await fetch("/api/photo/pose", { method: "POST", headers: { "Content-Type": "application/json" },
+                                             body: JSON.stringify({ id: match.fid, file: match.file, pose }) });
+  if (r.ok) { Object.assign(p, pose, { east: 0, north: 0 }); applyMatchCamera(); $("mMsg").textContent = "Pose saved."; }
+  else $("mMsg").textContent = "Saving failed (" + r.status + ")";
+};
+// eyedropper: click the photo to take a wall colour (5x5 average) for the editor
+let pickCanvas = null;
+$("mPick").onclick = () => { $("matchLayer").classList.toggle("pick"); $("mMsg").textContent =
+  $("matchLayer").classList.contains("pick") ? "Click a wall in the photo." : ""; };
+$("matchLayer").addEventListener("click", (e) => {
+  if (!match || !$("matchLayer").classList.contains("pick")) return;
+  const img = $("matchImg");
+  pickCanvas = pickCanvas || document.createElement("canvas");
+  pickCanvas.width = match.nw; pickCanvas.height = match.nh;
+  const g = pickCanvas.getContext("2d", { willReadFrequently: true });
+  g.drawImage(img, 0, 0);
+  const r = $("matchLayer").getBoundingClientRect();
+  const x = Math.round((e.clientX - r.left) / match.scale), y = Math.round((e.clientY - r.top) / match.scale + match.pose.trim_top);
+  const d = g.getImageData(Math.max(0, x - 2), Math.max(0, y - 2), 5, 5).data;
+  const c = [0, 0, 0];
+  for (let i = 0; i < d.length; i += 4) { c[0] += d[i]; c[1] += d[i + 1]; c[2] += d[i + 2]; }
+  const hex = "#" + c.map((v) => Math.round(v / (d.length / 4)).toString(16).padStart(2, "0")).join("");
+  $("matchLayer").classList.remove("pick");
+  openEditor(true);
+  if ($("edWall")) { $("edWall").value = hex; $("edWall").dispatchEvent(new Event("input")); }
+  $("mMsg").textContent = `Wall colour ${hex} set in the editor.`;
+});
+
+// ------------------------------------------------ add a photo (with its camera pose)
+let apData = null;
+function openAddPhoto() {
+  if (!sel.feat) return;
+  apData = null;
+  $("apName").textContent = featLabel(sel.feat);
+  $("apDrop").innerHTML = 'Drop an image here, or click to choose<input type="file" id="apFile" accept="image/*" hidden>';
+  $("apFile").onchange = (e) => readPhoto(e.target.files[0]);
+  for (const k of ["apUrl", "apLat", "apLon", "apHeading"]) $(k).value = "";
+  $("apPitch").value = 0; $("apFov").value = 75; $("apEye").value = 2.5; $("apErr").textContent = "";
+  $("addPhoto").classList.add("on");
+}
+function readPhoto(file) {
+  if (!file || !file.type.startsWith("image/")) return;
+  const fr = new FileReader();
+  fr.onload = () => { apData = fr.result;
+    $("apDrop").innerHTML = `<img src="${apData}" alt=""><span class="k">${esc(file.name)} · click to change</span>` +
+                            '<input type="file" id="apFile" accept="image/*" hidden>';
+    $("apFile").onchange = (e) => readPhoto(e.target.files[0]); };
+  fr.readAsDataURL(file);
+}
+$("apDrop").onclick = (e) => { if (e.target.tagName !== "INPUT") $("apFile").click(); };
+$("apDrop").ondragover = (e) => { e.preventDefault(); $("apDrop").classList.add("over"); };
+$("apDrop").ondragleave = () => $("apDrop").classList.remove("over");
+$("apDrop").ondrop = (e) => { e.preventDefault(); $("apDrop").classList.remove("over"); readPhoto(e.dataTransfer.files[0]); };
+// Street View URL: …/@lat,lon,3a,<fov>y,<heading>h,<tilt>t/…   (tilt 90 = level)
+$("apUrl").oninput = (e) => {
+  const m = e.target.value.match(/@(-?\d+\.\d+),(-?\d+\.\d+)(?:,[\d.]+a)?,([\d.]+)y,([\d.]+)h(?:,([\d.]+)t)?/);
+  if (!m) return;
+  $("apLat").value = m[1]; $("apLon").value = m[2]; $("apFov").value = m[3]; $("apHeading").value = m[4];
+  $("apPitch").value = m[5] ? (+m[5] - 90).toFixed(1) : 0;
+};
+$("apCancel").onclick = () => $("addPhoto").classList.remove("on");
+$("apSave").onclick = async () => {
+  const num = (id) => parseFloat($(id).value);
+  const pose = { lat: num("apLat"), lon: num("apLon"), heading: num("apHeading"), pitch: num("apPitch") || 0,
+                 fov: num("apFov") || 75, fov_axis: "v", eye: num("apEye") || 2.5, trim_top: 0, trim_bottom: 0,
+                 url: $("apUrl").value.trim() };
+  if (!apData) return ($("apErr").textContent = "Choose an image first.");
+  if (!isFinite(pose.lat) || !isFinite(pose.lon) || !isFinite(pose.heading))
+    return ($("apErr").textContent = "Camera lat, lon and heading are needed (paste a Street View URL to fill them).");
+  const f = sel.feat;
+  const r = await fetch("/api/photo", { method: "POST", headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ id: f.id, name: f.name, data: apData, pose }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) return ($("apErr").textContent = "Upload failed: " + (j.error || r.status));
+  $("addPhoto").classList.remove("on");
+  select(sel.mesh, sel.feat);
+  enterMatch(f, { ...pose, file: j.file, src: "Your photo" });
+};
+
+// ------------------------------------------------ edit a building (source/overrides.json) and rebuild
+const toHex = (c) => "#" + c.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+const fromHex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+function openEditor(force) {
+  const f = sel.feat, bd = $("bld");
+  if (!f || !bd) return;
+  let ed = bd.querySelector(".edit");
+  if (ed && !force) { ed.remove(); return; }
+  if (ed) return;
+  const ov = overrides[f.id] || {}, extra = { ...ov };
+  delete extra.h; delete extra.wall; delete extra.glass;
+  const builtIn = f.spec ? Object.fromEntries(Object.entries(f.spec).filter(([k]) => !["h", "wall", "glass"].includes(k))) : null;
+  ed = document.createElement("div");
+  ed.className = "edit";
+  ed.innerHTML =
+    `<label>height m <input type="number" id="edH" step="0.5" value="${ov.h ?? f.h}" style="width:80px"></label>` +
+    `<label>wall <input type="color" id="edWall" value="${toHex(ov.wall || f.wall || [200, 200, 200])}">` +
+    `<span class="k" id="edWallT"></span></label>` +
+    `<label><input type="checkbox" id="edGlass" ${(ov.glass ?? f.glass) ? "checked" : ""}> glass facade</label>` +
+    `<label class="col">shape settings (JSON, merged over the built-in ones)` +
+    `<textarea id="edJson" spellcheck="false" placeholder='${esc(builtIn ? JSON.stringify(builtIn) : "{}")}'>` +
+    `${Object.keys(extra).length ? esc(JSON.stringify(extra, null, 1)) : ""}</textarea></label>` +
+    (builtIn ? `<div class="k" style="font-size:11px">built-in: ${esc(JSON.stringify(builtIn)).slice(0, 400)}</div>` : "") +
+    `<div class="row"><button id="edSave">Save</button><button id="edBuild">Save &amp; rebuild</button>` +
+    `${f.edited || overrides[f.id] ? '<button id="edReset" class="bad">Reset</button>' : ""}</div>` +
+    `<div class="k" id="edMsg" style="font-size:12px"></div>`;
+  bd.appendChild(ed);
+  const showHex = () => { $("edWallT").textContent = $("edWall").value; };
+  $("edWall").oninput = showHex; showHex();
+  const collect = () => {
+    const spec = {};
+    let extraObj = {};
+    const t = $("edJson").value.trim();
+    if (t) { extraObj = JSON.parse(t); if (typeof extraObj !== "object" || Array.isArray(extraObj)) throw new Error("JSON must be an object"); }
+    Object.assign(spec, extraObj);
+    const h = parseFloat($("edH").value);
+    if (isFinite(h) && Math.abs(h - f.h) > 0.05 || ov.h != null) spec.h = h;
+    const wall = fromHex($("edWall").value), was = ov.wall || f.wall || [200, 200, 200];
+    if (wall.some((v, i) => Math.abs(v - was[i]) > 1) || ov.wall) spec.wall = wall;
+    if ($("edGlass").checked !== !!(ov.glass ?? f.glass) || ov.glass != null) spec.glass = $("edGlass").checked;
+    return spec;
+  };
+  const save = async (spec) => {
+    const r = await fetch("/api/overrides", { method: "POST", headers: { "Content-Type": "application/json" },
+                                              body: JSON.stringify({ id: f.id, spec: Object.keys(spec).length ? spec : null }) });
+    if (!r.ok) throw new Error("save failed: " + r.status);
+    if (Object.keys(spec).length) overrides[f.id] = spec; else delete overrides[f.id];
+  };
+  $("edSave").onclick = async () => {
+    try { await save(collect()); $("edMsg").textContent = "Saved to source/overrides.json. Rebuild to see it."; }
+    catch (e) { $("edMsg").textContent = String(e.message || e); }
+  };
+  $("edBuild").onclick = async () => {
+    try { await save(collect()); startBuild(); } catch (e) { $("edMsg").textContent = String(e.message || e); }
+  };
+  if ($("edReset")) $("edReset").onclick = async () => { await save({}); $("edMsg").textContent = "Edits removed. Rebuild to see it."; };
+}
+
+// ------------------------------------------------ rebuild with live progress
+async function startBuild() {
+  if (!canEdit) return;
+  const r = await fetch("/api/build", { method: "POST" });
+  if (!r.ok && r.status !== 409) { $("status").textContent = "build request failed: " + r.status; return; }
+  $("buildBox").classList.add("on"); $("bbClose").disabled = true; $("buildLog").textContent = "";
+  $("bbTitle").textContent = "Rebuilding the pack"; $("bbStatus").textContent = "starting…";
+  let since = 0;
+  for (;;) {
+    const st = await (await fetch("/api/build/status?since=" + since)).json();
+    since = st.next;
+    if (st.lines.length) {
+      const log = $("buildLog");
+      log.textContent += st.lines.join("\n") + "\n";
+      log.scrollTop = log.scrollHeight;
+    }
+    const keys = st.stages.map((x) => x[0]), cur = keys.indexOf(st.stage);
+    $("bbStages").innerHTML = st.stages.map(([k, label], i) => {
+      const cls = st.state === "done" || i < cur ? "done" : i === cur ? (st.state === "failed" ? "failed" : "active") : "";
+      const ic = cls === "done" ? "✓" : cls === "active" ? "●" : cls === "failed" ? "✗" : "○";
+      return `<li class="${cls}"><span class="ic">${ic}</span>${label}</li>`;
+    }).join("");
+    $("bbBar").style.width = (st.state === "done" ? 100 : Math.max(3, 100 * (cur + 0.5) / keys.length)) + "%";
+    $("bbStatus").textContent = `${st.state === "running" ? "running" : st.state} · ${st.elapsed}s`;
+    if (st.state === "done") {
+      $("bbStatus").textContent = `done in ${st.elapsed}s · reloading…`;
+      await load(true);
+      if (match) applyMatchCamera();
+      $("bbStatus").textContent = `done in ${st.elapsed}s · reloaded`;
+      $("bbClose").disabled = false;
+      setTimeout(() => $("buildBox").classList.remove("on"), 1500);
+      return;
+    }
+    if (st.state === "failed") {
+      $("bbTitle").textContent = "Build failed"; $("bbClose").disabled = false; return;
+    }
+    await new Promise((res) => setTimeout(res, 600));
+  }
+}
+$("bbClose").onclick = () => $("buildBox").classList.remove("on");
+
+// ------------------------------------------------ removal list (source/removed.txt via serve.py)
+async function saveRemoved() {
+  const r = await fetch("/api/removed", { method: "POST", headers: { "Content-Type": "application/json" },
+                                           body: JSON.stringify({ ids: [...removed], notes }) });
+  if (!r.ok) throw new Error("save failed: " + r.status);
+}
+async function toggleRemoved(f) {
+  if (!canEdit) return;
+  if (removed.has(f.id)) { removed.delete(f.id); delete notes[f.id]; }
+  else {
+    removed.add(f.id);
+    const b = buildings.find((x) => x.feat === f), w = b && whereIs(b.box);
+    notes[f.id] = `${featLabel(f)}, ${f.h} m` + (w && !w.inside.length ? `, ${nearText(w)}` : "");
+  }
+  try { await saveRemoved(); } catch (e) { $("status").textContent = String(e); }
+  for (const m of world.children) if (m.userData.feats.some((x) => x.id === f.id)) applyMarks(m);
+  select(sel.mesh, sel.feat);
+  updatePending();
+  renderList();
+}
+// marked but still built (needs a rebuild), or listed but no longer built (already applied)
+function updatePending() {
+  const built = new Set(buildings.map((b) => b.feat.id));
+  const toDrop = [...removed].filter((id) => built.has(id)).length;
+  const el = $("pending");
+  el.style.display = toDrop ? "block" : "none";
+  el.textContent = `${toDrop} building${toDrop > 1 ? "s" : ""} marked for removal: Rebuild to apply`;
+}
+$("rebuild").onclick = () => startBuild();
+
+// ------------------------------------------------ side list: objects / buildings / removed
+let tab = "objects";
+const sorts = { objects: ["tris", -1], buildings: ["tris", -1], removed: ["name", 1] };
+const COLS = {
+  objects: [["name", "object"], ["tris", "tris"], ["verts", "verts"]],
+  buildings: [["name", "building"], ["h", "m"], ["tris", "tris"]],
+  removed: [["name", "removed building"], ["state", "state"], ["act", ""]],
+};
+function rowsFor() {
+  if (tab === "objects") {
+    return world.children.filter((m) => m.userData.file && !m.userData.lib).map((m) => {
+      const w = whereIs(new THREE.Box3().setFromObject(m));
+      const lms = w.inside.map((l) => l.name);
+      return { m, tris: m.userData.tris, verts: m.userData.verts,
+               name: lms[0] || (w.near ? `near ${w.near.name}` : m.userData.file),
+               label: lms.length ? esc(lms[0]) + (lms.length > 1 ? ` <span class="n">+${lms.length - 1}</span>` : "")
+                                 : `<span class="n">${esc(w.near ? "near " + w.near.name : m.userData.file)}</span>`,
+               title: m.userData.file + (lms.length ? ": " + lms.join(", ") : ""),
+               text: [m.userData.file, ...lms, w.near ? "near " + w.near.name : "",
+                      ...m.userData.feats.map((f) => f.name + " " + f.id)].join(" ") };
+    });
+  }
+  if (tab === "buildings") {
+    return buildings.map((b) => {
+      const named = !!b.feat.name, w = named ? null : whereIs(b.box);
+      return { m: b.mesh, f: b.feat, tris: b.feat.tri1 - b.feat.tri0, h: b.feat.h,
+               name: b.feat.name || (w.near ? `~${w.near.name}` : b.feat.id),
+               label: (named ? esc(b.feat.name) : `<span class="n">${esc(w.near ? "near " + w.near.name : b.feat.id)}</span>`) +
+                      `<br>${llSpan(b.box)}`,
+               title: `id ${b.feat.id}` + (w?.near ? ` (${nearText(w)})` : ""), removed: removed.has(b.feat.id),
+               text: [b.feat.name, b.feat.id, b.feat.kind, w?.near ? "near " + w.near.name : "", llText(b.box),
+                      b.mesh.userData.file, removed.has(b.feat.id) ? "removed" : ""].join(" ") };
+    });
+  }
+  const built = new Map(buildings.map((b) => [b.feat.id, b]));
+  return [...removed].map((id) => {
+    const b = built.get(id);
+    return { m: b?.mesh, f: b?.feat, id, name: notes[id] || id, label: esc(notes[id] || id), title: `id ${id}`,
+             state: b ? "marked" : "gone", removed: true, text: `${id} ${notes[id] || ""} ${b ? "marked" : "gone"}` };
+  });
+}
+function renderList() {
+  if (!data) return;
+  const all = rowsFor(), [key, dir] = sorts[tab], cols = COLS[tab];
+  // every word must match somewhere (case-insensitive), e.g. "near fahari 125"
+  const words = $("q").value.toLowerCase().split(/\s+/).filter(Boolean);
+  const rows = words.length ? all.filter((r) => { const t = (r.text || r.name || "").toLowerCase();
+                                                    return words.every((w) => t.includes(w)); }) : all;
+  $("qCount").textContent = words.length ? `${rows.length}/${all.length}` : "";
+  rows.sort((a, b) => key === "name" || key === "state" ? dir * String(a[key]).localeCompare(String(b[key]))
+                                                         : dir * ((a[key] ?? 0) - (b[key] ?? 0)));
+  $("thead").innerHTML = "<tr>" + cols.map(([k, label]) =>
+    `<th data-k="${k}" class="${k === key ? "on" : ""}">${label}${k === key ? (dir < 0 ? " ▾" : " ▴") : ""}</th>`).join("") + "</tr>";
+  document.querySelectorAll("#thead th").forEach((th) => th.onclick = () => {
+    const k = th.dataset.k;
+    if (k === "act") return;
+    sorts[tab] = sorts[tab][0] === k ? [k, -sorts[tab][1]] : [k, k === "name" || k === "state" ? 1 : -1];
+    renderList();
+  });
+  const barKey = tab === "objects" ? (key === "verts" ? "verts" : "tris") : "tris";
+  const max = Math.max(1, ...rows.map((r) => r[barKey] || 0));
+  const tb = $("rows");
+  tb.innerHTML = "";
+  if (!rows.length) {
+    tb.innerHTML = `<tr><td class="empty" colspan="3">${words.length ? "no match" : tab === "removed" ?
+                    "nothing removed yet: select a building and press Remove" : "nothing here"}</td></tr>`;
+  }
+  for (const r of rows) {
+    const tr = document.createElement("tr");
+    tr._m = r.m; tr._f = r.f;
+    if (r.removed) tr.classList.add("removed");
+    const bar = r[barKey] ? `<div class="bar" style="width:${(100 * r[barKey] / max).toFixed(1)}%"></div>` : "";
+    const first = `<td title="${esc(r.title)}">${r.label}${tab === "removed" ? "" : bar}</td>`;
+    if (tab === "objects") tr.innerHTML = first + `<td>${r.tris.toLocaleString()}</td><td>${r.verts.toLocaleString()}</td>`;
+    else if (tab === "buildings") tr.innerHTML = first + `<td>${r.h}</td><td>${r.tris.toLocaleString()}</td>`;
+    else {
+      tr.innerHTML = first + `<td class="k">${r.state}</td><td><button ${canEdit ? "" : "disabled"}>Restore</button></td>`;
+      tr.querySelector("button").onclick = async (e) => {
+        e.stopPropagation();
+        if (r.f) return toggleRemoved(r.f);
+        removed.delete(r.id); delete notes[r.id];
+        await saveRemoved(); updatePending(); renderList();
+      };
+    }
+    tr.onclick = () => {
+      if (!r.m) return;
+      select(r.m, r.f || null);
+      flyTo(r.f ? buildings.find((x) => x.feat === r.f).box : new THREE.Box3().setFromObject(r.m));
+    };
+    if (!tb.children.length) tr.dataset.first = "1";
+    tb.appendChild(tr);
+  }
+  $("listSum").textContent = String(rows.length);
+  markRows();
+}
+function markRows() {
+  document.querySelectorAll("#rows tr").forEach((tr) =>
+    tr.classList.toggle("sel", tab === "objects" ? tr._m && tr._m === sel.mesh : tr._f && tr._f === sel.feat));
+}
+let qTimer = 0;
+$("q").addEventListener("input", () => { clearTimeout(qTimer); qTimer = setTimeout(renderList, 80); });
+document.querySelectorAll("#list .tabs button").forEach((b) => b.onclick = () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll("#list .tabs button").forEach((x) => x.classList.toggle("on", x === b));
+  renderList();
+});
+$("listHead").onclick = () => {
+  const closed = $("list").classList.toggle("closed");
+  $("listArrow").textContent = closed ? "▸" : "▾";
+  try { localStorage.setItem("hkna.list", closed ? "0" : "1"); } catch (e) {}
+};
+try { if (localStorage.getItem("hkna.list") === "1") $("listHead").onclick(); } catch (e) {}
+
+// frame a box: keep the current viewing direction, back off to fit it
+function flyTo(b) {
+  const c = b.getCenter(new THREE.Vector3()), sz = b.getSize(new THREE.Vector3());
+  let dir = camera.position.clone().sub(controls.target);
+  if (!(dir.length() > 1e-3)) dir.set(-0.55, 0.45, 0.55);   // no camera yet: from the south-west
+  dir.normalize();
+  if (dir.y < 0.25) { dir.y = 0.25; dir.normalize(); }
+  if (dir.y > 0.8) { dir.y = 0.8; dir.normalize(); }          // never straight down
+  const dist = Math.max(120, Math.max(sz.x, sz.y, sz.z) * 1.8);
+  controls.target.copy(c);
+  camera.position.copy(c).addScaledVector(dir, dist);
+  controls.update();
+}
+
+// default viewpoint for a landmark: from the south-west, looking at its middle
+function goLandmark(name, az = 225, el = 22) {
+  const l = data.landmarks.find((x) => x.name === name);
+  if (!l) return;
+  const target = new THREE.Vector3(l.x, Math.max(6, l.h * 0.45), l.z);
+  const dist = Math.max(170, l.h * 2.6);       // low landmarks can still be 100+ m across
+  const a = THREE.MathUtils.degToRad(az), e = THREE.MathUtils.degToRad(el);
+  camera.position.set(target.x + dist * Math.cos(e) * Math.sin(a), target.y + dist * Math.sin(e),
+                      target.z - dist * Math.cos(e) * Math.cos(a));
+  controls.target.copy(target);
+  controls.update();
+  $("lm").value = name;
+  const b = buildingAt(l.x, l.z);
+  select(b ? b.mesh : meshAt(l.x, l.z), b ? b.feat : null, name);
+}
+
+// click (not drag) picks the building under the cursor
+const ray = new THREE.Raycaster(), down = new THREE.Vector2();
+renderer.domElement.addEventListener("pointerdown", (e) => down.set(e.clientX, e.clientY));
+renderer.domElement.addEventListener("pointerup", (e) => {
+  if (e.button !== 0 || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) return;
+  ray.setFromCamera(new THREE.Vector2(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
+  const hit = ray.intersectObjects(world.children, false)[0];
+  if (!hit) return select(null);
+  const f = e.shiftKey ? null : hit.object.userData.feats.find((x) => hit.faceIndex >= x.tri0 && hit.faceIndex < x.tri1);
+  select(hit.object, f || null);
+});
+
+// #lm=<name>[&az=&el=] | #obj=<cell> | #bld=<id> | #cam=x,y,z,tx,ty,tz | #at=lat,lon,h&az=&el=&dist=
+//   (+ &list=1&tab=buildings; &clean=1 hides the panels and selection boxes, for screenshots)
+function fromHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  if (p.get("list") === "1" && $("list").classList.contains("closed")) $("listHead").onclick();
+  if (p.get("q") !== null) $("q").value = p.get("q");
+  if (p.get("tab")) document.querySelector(`#list .tabs button[data-tab="${p.get("tab")}"]`)?.onclick();
+  else if (p.get("q") !== null) renderList();
+  if (p.get("cam")) {
+    const c = p.get("cam").split(",").map(Number);
+    camera.position.set(c[0], c[1], c[2]); controls.target.set(c[3], c[4], c[5]); controls.update();
+  } else if (p.get("bld")) {
+    const b = buildings.find((x) => x.feat.id === p.get("bld"));
+    if (b) { select(b.mesh, b.feat); flyTo(b.box); }
+    if (b && p.get("match")) {      // #bld=<id>&match=<photo file>[&opacity=0.5]: open that photo in match mode
+      fetch(`../../photos/${encodeURIComponent(b.feat.id)}.json?t=${Date.now()}`).then((r) => r.json()).then((rec) => {
+        const ph = rec.photos.find((x) => x.file === p.get("match"));
+        if (p.get("opacity")) { $("mOpacity").value = p.get("opacity"); $("mOpacity").oninput({ target: $("mOpacity") }); }
+        if (ph) enterMatch(b.feat, ph);
+      });
+    }
+  } else if (p.get("obj")) {        // e.g. obj=c_345_270
+    const m = world.children.find((x) => x.userData.file === `objects/${p.get("obj").replace(/\.obj$/, "")}.obj`);
+    if (m) { select(m, null); flyTo(new THREE.Box3().setFromObject(m)); }
+  } else if (p.get("at")) {         // orbit view of a point: camera az deg from it, el deg up, dist m away
+    const [lat, lon, h] = p.get("at").split(",").map(Number);
+    const t = toLocal(lat, lon).setY(h || 0), d = +(p.get("dist") ?? 400);
+    const a = THREE.MathUtils.degToRad(+(p.get("az") ?? 225)), e = THREE.MathUtils.degToRad(+(p.get("el") ?? 22));
+    camera.position.set(t.x + d * Math.cos(e) * Math.sin(a), t.y + d * Math.sin(e), t.z - d * Math.cos(e) * Math.cos(a));
+    controls.target.copy(t);
+    controls.update();
+  } else if (p.get("lm")) {
+    goLandmark(p.get("lm"), +(p.get("az") ?? 225), +(p.get("el") ?? 22));
+  } else {
+    goLandmark("Jamia Mosque");
+  }
+  if (p.get("clean") === "1") {
+    for (const id of ["ui", "list"]) $(id).style.display = "none";
+    for (const h of [objBox, bldBox, photoMarks]) h.visible = false;
+    showMembers(null);
+  }
+}
+
+$("lm").onchange = (e) => { if (e.target.value !== "__near") goLandmark(e.target.value); };
+$("reload").onclick = () => load(true);
+$("ground").onchange = (e) => { groundGroup.visible = e.target.checked; };
+$("wire").onchange = (e) => { if (atlasMat) atlasMat.wireframe = removedMat.wireframe = e.target.checked; };
+$("hideRemoved").onchange = () => world.children.forEach(applyMarks);
+$("link").onclick = () => {
+  const f = (v) => v.toFixed(1), c = camera.position, t = controls.target;
+  history.replaceState(null, "", "#cam=" + [c.x, c.y, c.z, t.x, t.y, t.z].map(f).join(","));
+  $("status").textContent = "camera in address bar";
+};
+addEventListener("keydown", (e) => {
+  if (e.target.id === "q") {
+    if (e.key === "Escape") { e.target.value = ""; renderList(); e.target.blur(); }
+    if (e.key === "Enter") document.querySelector("#rows tr[data-first]")?.click();
+    return;
+  }
+  if (["INPUT", "TEXTAREA"].includes(e.target.tagName) && e.target.type !== "range" && e.target.type !== "checkbox") return;
+  if ($("addPhoto").classList.contains("on")) { if (e.key === "Escape") $("addPhoto").classList.remove("on"); return; }
+  if (match) {
+    const p = match.pose, st = e.shiftKey ? 0.1 : 1, k = e.key;
+    const step = { ArrowLeft: ["heading", -st], ArrowRight: ["heading", st], ArrowUp: ["pitch", st], ArrowDown: ["pitch", -st],
+                   "[": ["fov", -st], "]": ["fov", st], PageUp: ["eye", st], PageDown: ["eye", -st] }[k];
+    if (step) { e.preventDefault(); p[step[0]] = (p[step[0]] + step[1] + (step[0] === "heading" ? 360 : 0)) % (step[0] === "heading" ? 360 : 1e9);
+                if (step[0] === "eye") p.eye = Math.max(0, p.eye); applyMatchCamera(); return; }
+    if (k === " ") { e.preventDefault(); const o = $("mOpacity"); o.value = +o.value > 0.5 ? 0 : 1; o.oninput({ target: o }); return; }
+    if (k === "Escape") { exitMatch(); return; }
+    return;
+  }
+  if ($("lightbox").classList.contains("on")) {
+    if (e.key === "Escape") closeLightbox();
+    if (e.key === "ArrowLeft") openLightbox(lbIndex - 1);
+    if (e.key === "ArrowRight") openLightbox(lbIndex + 1);
+    return;
+  }
+  if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return;
+  if (e.key === "/") {
+    e.preventDefault();
+    if ($("list").classList.contains("closed")) $("listHead").onclick();
+    $("q").focus();
+    return;
+  }
+  if (e.key === "r" || e.key === "R") load(true);
+  if (e.key === "Escape") select(null);
+  if ((e.key === "Delete" || e.key === "Backspace") && sel.feat) toggleRemoved(sel.feat);
+});
+addEventListener("hashchange", fromHash);
+addEventListener("resize", () => {
+  if (match) return layoutMatch();
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+renderer.setAnimationLoop(() => { if (!match) controls.update(); renderer.render(scene, camera); });
+load(false).then(() => { document.body.dataset.ready = "1"; })
+           .catch((e) => { $("status").textContent = "load failed: " + e; });
+</script>
+</body>
+</html>

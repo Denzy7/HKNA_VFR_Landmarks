@@ -1,0 +1,3 @@
+# Buildings left out of the pack, one feature id per line (OSM way id, relation member id,
+# or a generated id such as abcA0). The viewer's Remove button edits this file; text after
+# '#' is a note.
