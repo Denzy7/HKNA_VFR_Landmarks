@@ -97,7 +97,8 @@ def run_build():
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):
-        if "/api/" in (args[0] if args else "") and "/status" not in (args[0] if args else ""):
+        line = str(args[0]) if args else ""     # request line, or an HTTPStatus from log_error
+        if "/api/" in line and "/status" not in line:
             super().log_message(fmt, *args)
 
     def reply(self, obj, code=200):
