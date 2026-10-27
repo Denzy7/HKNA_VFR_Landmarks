@@ -121,15 +121,15 @@ def overview(ortho, tex_dir, objs):
             print(f"ground overview: {a1 - a0}x{b1 - b0} px")
     if not os.path.exists(dst):
         cols, rows = (fx1 - fx0) // F + 1, (fy1 - fy0) // F + 1
-        mosaic = Image.new("RGB", (cols * OVERVIEW_PX, rows * OVERVIEW_PX), (110, 106, 80))
+        canvas = Image.new("RGB", (cols * OVERVIEW_PX, rows * OVERVIEW_PX), (110, 106, 80))
         for fy in range(fy0, fy1 + 1, F):
             for fx in range(fx0, fx1 + 1, F):
                 f = f"{tex_dir}/{fy // 256}_{fx // 256}_GO2{z}.dds"
                 if os.path.exists(f):
                     img = Image.open(f).convert("RGB").resize((OVERVIEW_PX, OVERVIEW_PX), Image.LANCZOS)
-                    mosaic.paste(img, ((fx - fx0) // F * OVERVIEW_PX, (fy - fy0) // F * OVERVIEW_PX))
+                    canvas.paste(img, ((fx - fx0) // F * OVERVIEW_PX, (fy - fy0) // F * OVERVIEW_PX))
         crop = tuple(round(v * k) for v in (x0 - fx0, y0 - fy0, x1 - fx0, y1 - fy0))
-        mosaic.crop(crop).save(dst, quality=85)
+        canvas.crop(crop).save(dst, quality=85)
         print(f"ground overview: {crop[2] - crop[0]}x{crop[3] - crop[1]} px")
     xa, za = local(n, w)
     xb, zb = local(s, e)
