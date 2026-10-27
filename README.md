@@ -293,6 +293,12 @@ This repo is the scenery pack. `Custom Scenery/HKNA_VFR_Landmarks` is a symlink 
 - The X-Plane scenery tools (DSFTool and DDSTool) are fetched to `~/.cache/xptools` if they're missing.
 - Imagery comes from `ORTHO_TEX`, which defaults to the Ortho4XP fork's `zOrtho4XP_-02+036/textures`.
 
+### CI and releases
+
+`.github/workflows/build.yml` builds the shareable `IMAGERY=open` pack on every push and pull request, and keeps the zip as a workflow artifact.
+Pushing a `v*` tag (`git tag v1.0 && git push origin v1.0`) also publishes it as a GitHub release, with `tools/release/README.txt` inside the zip for install notes and credits.
+The CI pack is built without simHeaven installed, so it doesn't defer to simHeaven's hand-made models or drop its duplicate turbines. The first run fetches the OpenAerialMap tiles (a few minutes); later runs restore them from the Actions cache.
+
 ## Sources and licensing
 
 - **Code.** The build scripts and tools in this repo are under the MIT License (see `LICENSE`).

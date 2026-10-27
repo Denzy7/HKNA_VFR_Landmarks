@@ -1,0 +1,72 @@
+# Builds the shareable pack (IMAGERY=open: Maxar via OpenAerialMap, OSM from the committed cache)
+# on every push and PR; a v* tag also publishes it as a GitHub release.
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      IMAGERY: open
+      PACK: HKNA_VFR_Landmarks
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      # X-Plane scenery tools (DSFTool, DDSTool), fetched by build.sh if missing
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/xptools
+          key: xptools-lin_24-5
+
+      # OpenAerialMap tiles never change, so each run restores the newest cache and saves a new
+      # one with whatever it added; only the first run pulls the few thousand tiles
+      - uses: actions/cache@v4
+        with:
+          path: imagery_cache
+          key: imagery-${{ github.run_id }}
+          restore-keys: imagery-
+
+      - name: Build
+        run: ./build.sh
+
+      - name: Package
+        run: |
+          version="${GITHUB_REF_NAME//\//-}"
+          [ "$GITHUB_REF_TYPE" = tag ] || version="$(git rev-parse --short HEAD)"
+          mkdir -p "dist/$PACK"
+          cp -r objects "Earth nav data" landmarks.txt "dist/$PACK/"
+          cp tools/release/README.txt "dist/$PACK/README.txt"
+          (cd dist && zip -qr "$PACK-$version.zip" "$PACK")
+          echo "ZIP=dist/$PACK-$version.zip" >> "$GITHUB_ENV"
+          ls -l dist/*.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACK }}
+          path: ${{ env.ZIP }}
+
+      - name: Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "$ZIP" --title "$GITHUB_REF_NAME" --generate-notes \
+            --notes "Open-imagery build. Imagery © Maxar via OpenAerialMap (CC BY-NC 4.0); map data © OpenStreetMap contributors (ODbL). Non-commercial use only; see README.txt in the zip."
