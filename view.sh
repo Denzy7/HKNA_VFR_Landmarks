@@ -8,6 +8,7 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 [ -f build.local.sh ] && . ./build.local.sh
 . tools/imagery.sh
+. tools/venv.sh
 [ -f build/-02+036.txt ] || { echo "no build yet: run ./build.sh first"; exit 1; }
 python3 -I tools/viewer/prep.py "$ORTHO_TEX"
 PORT="${VIEW_PORT:-8765}"

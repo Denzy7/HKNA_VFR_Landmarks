@@ -12,6 +12,7 @@ cd "$(dirname "$(readlink -f "$0")")"
 # or open (Maxar 30 cm via OpenAerialMap, CC BY-NC), falling back to open without ORTHO_TEX;
 # see README "Imagery"
 . tools/imagery.sh
+. tools/venv.sh
 XPTOOLS="${XPTOOLS:-$HOME/.cache/xptools}"
 # installed scenery, read at build time so simHeaven's duplicate turbines can be excluded and
 # its hand-made models protected (nothing from simHeaven is stored in this repo)

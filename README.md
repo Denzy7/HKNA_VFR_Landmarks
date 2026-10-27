@@ -285,6 +285,7 @@ This repo is the scenery pack. `Custom Scenery/HKNA_VFR_Landmarks` is a symlink 
 ./build.sh
 ```
 
+- The Python dependencies (`requirements.txt`: numpy, Pillow, shapely) are installed into a venv in `.venv/`, which is not tracked in git. `build.sh`, `view.sh` and `shot.sh` create it on first run and reinstall when `requirements.txt` changes. Set `VENV=/path/to/venv` in `build.local.sh` to use another one.
 - `source/osm_fetch.py` downloads the OSM data on the first build and caches it in `source/osm/`, which is not tracked in git.
   - Later builds reuse that cache, so the scenery doesn't change under you. Run `python3 source/osm_fetch.py source/osm --refresh` to pull fresh data.
   - Overpass throttles heavily. If a first build fails with 502/504 errors, just run it again later.

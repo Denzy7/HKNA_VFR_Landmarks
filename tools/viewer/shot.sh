@@ -5,6 +5,8 @@
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/../.."
 out="$(readlink -f "$1")"; hash="${2:-}"; size="${3:-1400,900}"
+[ -f build.local.sh ] && . ./build.local.sh
+. tools/venv.sh
 PORT="${SHOT_PORT:-8766}"
 python3 -I tools/viewer/serve.py "$PORT" >/dev/null 2>&1 &
 srv=$!
