@@ -286,8 +286,8 @@ This repo is the scenery pack. `Custom Scenery/HKNA_VFR_Landmarks` is a symlink 
 ```
 
 - The Python dependencies (`requirements.txt`: numpy, Pillow, shapely) are installed into a venv in `.venv/`, which is not tracked in git. `build.sh`, `view.sh` and `shot.sh` create it on first run and reinstall when `requirements.txt` changes. Set `VENV=/path/to/venv` in `build.local.sh` to use another one.
-- `source/osm_fetch.py` downloads the OSM data on the first build and caches it in `source/osm/`, which is not tracked in git.
-  - Later builds reuse that cache, so the scenery doesn't change under you. Run `python3 source/osm_fetch.py source/osm --refresh` to pull fresh data.
+- The OSM data comes from Overpass, cached in `source/osm/cache/`. The cache is in git, so a fresh clone builds without touching Overpass.
+  - `source/osm_fetch.py` only downloads a query that's new or changed. Builds reuse the cache, so the scenery doesn't change under you. Run `python3 source/osm_fetch.py source/osm --refresh` to pull fresh data.
   - Overpass throttles heavily. If a first build fails with 502/504 errors, just run it again later.
 - `source/build.py` does the work: features, imagery sampling, the texture atlas, the OBJs, and the DSF text for each tile.
 - The X-Plane scenery tools (DSFTool and DDSTool) are fetched to `~/.cache/xptools` if they're missing.
@@ -297,7 +297,7 @@ This repo is the scenery pack. `Custom Scenery/HKNA_VFR_Landmarks` is a symlink 
 
 - **Code.** The build scripts and tools in this repo are under the MIT License (see `LICENSE`).
 - **OpenStreetMap.** Building footprints, heights, stadiums, turbines and sites are © OpenStreetMap contributors, under the [ODbL](https://opendatacommons.org/licenses/odbl/1-0/).
-  - No OSM data is stored in this repo. `source/osm_fetch.py` downloads it from Overpass on the first build and caches it locally in `source/osm/`.
+  - The Overpass extracts in `source/osm/cache/` are OSM data, licensed under the ODbL, not the MIT License. See `source/osm/README.md`.
   - Scenery built from them must carry the attribution "© OpenStreetMap contributors".
 - **Imagery, which is not included.** Roof textures and facade colours are sampled at build time (see "Imagery: go2 or open").
   - **`IMAGERY=go2`:** from *your own* Ortho4XP tiles (`ORTHO_TEX`). Those usually come from commercial providers whose terms don't allow redistribution. **Do not publish or share a pack built this way** (`objects/`, `Earth nav data/`). Share this repo, and let others build it against their own tiles.
